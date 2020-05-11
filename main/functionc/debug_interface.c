@@ -1,6 +1,6 @@
 
-void debug_interface() {
-   printf("%7.2fs %3d tune-> %c,%c/%6.3f  ", 0.001*esp_log_timestamp(), nsamp - lastsamp, axis, par, amt);
+void debug_interface() { 
+   printf("%2d %d %7.2fs %3d tune-> %c,%c/%6.3f  ", wait, kill, 0.001*esp_log_timestamp(), nsamp - lastsamp, axis, par, amt);
    if(axis == 'x') printf("PID gain %3.2f %3.2f %3.0f  I=%7.1f D=%5.2f  FusX=%6.2f  th=%4d  xPID= %3d %3d %3d",
         xPgain,xIgain,xDgain,xInt,xDer,imu.pitch,throttle,(int)(xPgain*xErr),(int)(xIgain*xInt),(int)(xDgain*xDer));
    if(axis == 'y') printf("PID gain %3.2f %3.2f %3.0f  I=%7.1f D=%5.2f  FusY=%6.2f  th=%4d  yPID= %3d %3d %3d",
@@ -10,6 +10,7 @@ void debug_interface() {
    printf("  Motors  %4d %4d %4d %4d PID %3dx %3dy %3dz\n", 
         Motor1, Motor2, Motor3, Motor4, (int)xPIDout, (int)yPIDout, (int)zPIDout);
    lastsamp = nsamp;
+
    scanf("%c\n", &col);
    if(col!=0){
        if (col == 'M') amt = amt * 10; 
@@ -17,15 +18,15 @@ void debug_interface() {
        if (col == 'a') { axis = axis + 1; if (axis > 'z') axis = 'x'; } 
        if (col == 'p') par = col; 
        if (col == 'i') {par = col; xInt=0; yInt=0; zInt=0; } 
+       if (col == 'k') {if (kill == 0) kill = 1; else kill = 0;}
              
        if (col == 'd') par = col; 
        if (col == 't') par = col; 
        if (col == 'T') par = col; 
-       if (col == 'r') {throttle = 1000; xInt=0; xIgain=0; xPgain=0; xDgain=0;amt=0.1;
-                        yInt=0; yIgain=0; yPgain=0; yDgain=0; zInt=0; zPgain=0; zDgain=0; zIgain=0;}
-       if (par == 't' && col == '+') throttle = throttle + 1;
+       if (col == 'r') {throttle = 1000; xInt=0; yInt=0; zInt=0; }
+       if (par == 't' && col == '+') throttle = throttle + 10;
        if (par == 'T' && col == '+') throttle = throttle + 50;
-       if (par == 't' && col == '-') throttle = throttle - 1;
+       if (par == 't' && col == '-') throttle = throttle - 10;
        if (par == 'T' && col == '-') throttle = throttle - 50;
        if (axis == 'x' && par == 'p' && col == '+') xPgain = xPgain + amt; 
        if (axis == 'x' && par == 'i' && col == '+') {xIgain = xIgain + amt; xInt=0; yInt=0; }
@@ -48,12 +49,13 @@ void debug_interface() {
        if (col == 's' ){ xPgain = 1.0; xIgain = 0.05; xDgain = 60; 
                          yPgain = 1.0; yIgain = 0.05; yDgain = 60; 
                          zPgain = 3; xInt=0; yInt=0;}
-       if (col == 'C' ) cal = 1;
-       if (col == 'c' ) {cal = 0; Motor1 = 1000;  Motor2 = 1000;  Motor3 = 1000;  Motor4 = 1000; }
+       if (col == 'C' ) {cal = 1; printf("Calibtate battery unplugged - then plug in wait for beeps hit 'c'\n"); }
+       if (col == 'c' ) {cal = 0; wait = 5; Motor1 = 1000;  Motor2 = 1000;  Motor3 = 1000;  Motor4 = 1000; imu.cal_cnt = 0; }
        if (col == 'h' || col == '?'){
             printf("Options \n");
             printf("h or ?   - this message\n");
-            printf("p, i, d  - select parameter to tune p i d \n");
+            printf("a        - change axis\n");
+            printf("p, i, d  - select parameter to tune p i d\n");
             printf("M or m   - increase/decrease amt by factor of 10\n");
             printf("+ or -   - increase/decrease parmameter by amt \n");
             printf("T or t   - select throttle adjment T +/- 50, t +/- 1 \n");

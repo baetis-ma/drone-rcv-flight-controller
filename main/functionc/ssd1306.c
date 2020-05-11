@@ -102,7 +102,7 @@ uint8_t fonttable5x7[1080] =
   0x02, 0x01, 0x02, 0x04, 0x02  // ~
 };
 
-static int ssd1305_init() 
+static int ssd1306_init() 
 {
    i2c_write( 0x3c,  0x00,  0xae );    // display off
    i2c_write( 0x3c,  0x00,  0xd5 );    // clockdiv
@@ -134,7 +134,7 @@ static int ssd1305_init()
    return(0);
 }
 
-static int ssd1305_blank(uint8_t val)
+static int ssd1306_blank(uint8_t val)
 {
    int len = 1024;
    uint8_t *data = malloc (len);
@@ -144,7 +144,7 @@ static int ssd1305_blank(uint8_t val)
    return(0);
 }
 
-static int ssd1305_text( char *disp_string )
+static int ssd1306_text( char *disp_string )
 {
    int len = 1024;
    int framebuf_ptr = 0;

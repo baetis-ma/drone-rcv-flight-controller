@@ -16,13 +16,17 @@
 #include <math.h>
 #include <driver/adc.h>
 
+//global motor disables
+int wait = 10, kill = 1;
+
 #define QMC5883L_I2C_ADDR     0x0d //hmc5883 i2c address
 #define i2c_frequency       500000 // max frequency of i2c clk
 #define i2c_port                 0 //i2c channel on ESP-WROOM-32 ESP32S
-#define i2c_gpio_scl            19 //D19 on ESP-WROOM-32 ESP32S
-#define i2c_gpio_sda            18 //D18 on ESP-WROOM-32 ESP32S
+#define i2c_gpio_scl            18 //D19 on ESP-WROOM-32 ESP32S
+#define i2c_gpio_sda            19 //D18 on ESP-WROOM-32 ESP32S
 #include "./interfaces/i2c.c"
 #include "./functionc/qmc5883l.c"
+#include "./functionc/ssd1306.c"
 
 #define BMP280_I2C_ADDR       0x76
 int digT1, digT2, digT3;
@@ -67,13 +71,15 @@ int   clearInts = 0, cal_cnt = 0, astate = 0, calib = 0, nsamp = 0;
 
 //pid globals shared between pid loops and debug
 float xPIDout, yPIDout, zPIDout, aPIDout;
-float xSig, xErr, xPgain = 0.50, xIgain = 0.033, xDgain = 60, xInt = 0, xDer, xLast = 0; //pitch
-float ySig, yErr, yPgain = 0.50, yIgain = 0.033, yDgain = 60, yInt = 0, yDer, yLast = 0; //roll
-float zSig, zErr, zPgain = 0.00, zIgain = 0.000, zDgain = 60, zInt = 0, zDer, zLast = 0; //yaw
-float aSig, aErr, aPgain = 0.00, aIgain = 0.000, aDgain =  0, aInt = 0, aDer, aLast = 0; //altitude
+//float xSig, xErr, xPgain = 0.50, xIgain = 0.033, xDgain = 60, xInt = 0, xDer, xLast = 0; //pitch
+//float ySig, yErr, yPgain = 0.50, yIgain = 0.033, yDgain = 60, yInt = 0, yDer, yLast = 0; //roll
+float xSig, xErr, xPgain = .5, xIgain = 0.000, xDgain =  0, xInt = 0, xDer, xLast = 0; //pitch
+float ySig, yErr, yPgain = .5, yIgain = 0.000, yDgain =  0, yInt = 0, yDer, yLast = 0; //roll
+float zSig, zErr, zPgain = 0, zIgain = 0.000, zDgain =  0, zInt = 0, zDer, zLast = 0; //yaw
+float aSig, aErr, aPgain = 0, aIgain = 0.000, aDgain =  0, aInt = 0, aDer, aLast = 0; //altitude
 
 //globals for attitude control
-int Motor1=1000, Motor2=1000, Motor3=1000, Motor4=1000;
+int cal = 0, Motor1=1000, Motor2=1000, Motor3=1000, Motor4=1000;
 float height = 3.72; float heightprog= -5.3; float height_cal = 0;
 float heading= 14.5; float headingprog= 333;
 float xdisp = -1.6; float ydisp = -0.1;
@@ -82,7 +88,7 @@ float xdisp = -1.6; float ydisp = -0.1;
 //debugging and monitoring interface
 char  blackbox_str[256];
 #include "./functionc/blackbox.c"
-char col = 0; int cntp =0; int cal=0; char par = 'p'; float amt = 0.1; char axis = 'x'; int lastsamp = 0;
+char col = 0; int cntp =0; char par = 'p'; float amt = 0.1; char axis = 'x'; int lastsamp = 0;
 #include "./functionc/debug_interface.c"
 
 void transmitter_comms () {
@@ -92,20 +98,21 @@ void transmitter_comms () {
     while(1) {
         waitcnt = nrf24_receive_pkt (data, timeout);
         if (waitcnt < timeout){
-           //printf("        ");for(int a=0; a<12;a++)printf("%3d ",data[a]);printf("\n");
-           printf("%8.4f   waited %3dmsec   ", (float)esp_timer_get_time()/1000000, 10*waitcnt);
            seq =      256 * data[0] + data[1];
-           throttle = 256 * data[2] + data[3];
+           //throttle = 256 * data[2] + data[3];
            yaw =      256 * data[4] + data[5];
            pitch =    256 * data[6] + data[7];
            roll =     256 * data[8] + data[9];
            state =    256 * data[10] + data[11];
+           //printf comm packets
+           //printf("        ");for(int a=0; a<12;a++)printf("%3d ",data[a]);printf("\n");
+           //printf("%8.4f   waited %3dmsec   ", (float)esp_timer_get_time()/1000000, 10*waitcnt);
            //sscanf((char*)data,"%d,%d,%d,%d,%d,%d",&seq, &throttle, &yaw, &pitch, &roll, &state);
 
            if(yaw>=1000&&yaw<=2000)headingprog = headingprog + (float)(yaw - 1500) / 400;
            if(throttle>=1000&&throttle<=2000)heightprog = heightprog + (float)(throttle - 1500) / 2000;
-           printf("seq = %5d %4d %4d %4d %4d st%d  %5.2f %5.2f\n", seq,throttle,yaw,pitch,roll,state,
-                                                     heightprog,headingprog);
+           //printf("seq = %5d %4d %4d %4d %4d st%d  %5.2f %5.2f\n", seq,throttle,yaw,pitch,roll,state,
+           //                                          heightprog,headingprog);
         } 
         else { printf("no packet = timed out at %dmsec\n", 10*waitcnt); }
 
@@ -114,7 +121,7 @@ void transmitter_comms () {
                blackbox_string(); 
                nrf24_transmit_pkt ((uint8_t*)blackbox_str, 32); }
 
-        //vTaskDelay(20/portTICK_RATE_MS); //should keep up with tranmitter commands 
+        vTaskDelay(1000/portTICK_RATE_MS); //should keep up with tranmitter commands 
     }
 }
 
@@ -130,9 +137,15 @@ void app_main() {
 
     escint_init();       //pwm servo for esc to motors
 
-    //i2cdetect();
-    //bmp280_cal();       //air pressure altitude measurements
-    //qmc5883_init();     //magnetometer heading measurements
+    i2cdetect();
+    bmp280_cal();       //air pressure altitude measurements
+    qmc5883_init();     //magnetometer heading measurements
+    char disp_str[128];
+    ssd1306_init();
+    ssd1306_blank(0xcc);
+    vTaskDelay(100);
+    sprintf(disp_str,"|4   F-450||| QuadCopter");
+    ssd1306_text(disp_str);
 
     //start tasks
     xTaskCreatePinnedToCore (imu_read, "imu_read", 8096, NULL, 5, NULL, 1);
@@ -143,18 +156,22 @@ void app_main() {
 
     int cnt = 0;
     while(1){
+       if (wait > 0)wait = wait - 1;
        //read bmp280 and qmc5883 - do this here other task too fast for bmp280
-       //if (cnt == 10) height_cal =  bmp280_read();
-       //height = 28.4*(height_cal - bmp280_read();
-       //heading = qmc5883_read();
+       if (cnt == 10) height_cal =  bmp280_read();
+       height = 28.4*(height_cal - bmp280_read());
+       heading = qmc5883_read();
 
+       //print atitude measurements
        //printf("%5d height=%3d heading=%3d deg    imu.pitch=%7.2f   imu.mroll=%7.2f\n", 
        //       cnt, (uint8_t)height, (uint8_t)heading, imu.pitch, imu.roll);
 
-       //debug_interface();
+       //debug modifies throttle (and pis gains) - throttle from transmitter must be disabled
+       debug_interface();
        vTaskDelay(1000/portTICK_RATE_MS);  
        ++cnt;
     }
+
     removeDevice(vspi);
     removeDevice(hspi);
     vTaskDelay(1);

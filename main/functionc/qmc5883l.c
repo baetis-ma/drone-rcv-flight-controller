@@ -10,6 +10,11 @@ int qmc5883_read () {
     int ymax = 3737; int ymin = -7930;
     int zmax = 3622; int zmin = -8395;
     float caloff = -2.3;   
+    //new values in on pcb
+    //xMax = 7062; xMin = -5330;
+    //yMax = 6460; yMin = -5900;
+    //zMax = 5567; zMin = -5817;
+
     uint8_t regdata[8];
     i2c_read(QMC5883L_I2C_ADDR, 0x00, regdata, 6); 
 
